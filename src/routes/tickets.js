@@ -108,7 +108,10 @@ router.post('/order', async (req, res) => {
     if (parseFloat(finalTotal) === 0 || tier.is_free) {
       // Free event — skip Razorpay
       const tickets = await createTickets(priced, event_id, tier.id, discountCodeRow, discountAmount, finalTotal, bookingGroupId, language);
-      await deliverTickets(tickets, eventRes.rows[0]);
+
+      // Deliver in background, respond immediately
+      deliverTickets(tickets, eventRes.rows[0]).catch(err => console.error('Background delivery failed:', err));
+
       return res.json({ success: true, free: true, tickets: tickets.map(t => ({
         id: t.id,
         seeker_name: t.seeker_name,
@@ -190,7 +193,7 @@ router.post('/verify', async (req, res) => {
     }
 
     // Generate QR and send tickets
-    await deliverTickets(tickets, event);
+    // await deliverTickets(tickets, event);
 
     res.json({ success: true, tickets: tickets.map(t => ({
       id: t.id,
@@ -202,6 +205,10 @@ router.post('/verify', async (req, res) => {
       zone_city: t.zone_city,
       phone: t.phone
     }))});
+
+    // Deliver QR/email/WhatsApp in background — don't block the response
+    deliverTickets(tickets, event).catch(err => console.error('Background delivery failed:', err));
+
   } catch (err) {
     console.error(err);
     res.status(500).json({ error: 'Payment verification failed' });
@@ -333,11 +340,19 @@ async function deliverTickets(tickets, event) {
   const { generateQRCode, sendTicketEmail, sendWhatsAppTicket } = require('../utils/helpers');
   for (const ticket of tickets) {
     try {
+      const t0 = Date.now();
       const qrBase64 = await generateQRCode(ticket.qr_uuid);
+      console.log(`QR generation took ${Date.now() - t0}ms`);
+
       if (ticket.email) {
+        const t1 = Date.now();
         await sendTicketEmail(ticket, event, qrBase64);
+        console.log(`Email sending took ${Date.now() - t1}ms`);
       }
+
+      const t2 = Date.now();
       await sendWhatsAppTicket(ticket, event, qrBase64);
+      console.log(`WhatsApp sending took ${Date.now() - t2}ms`);
     } catch (err) {
       console.error('Delivery error for ticket', ticket.id, err.message);
     }
