@@ -4,7 +4,14 @@ const cors = require('cors');
 
 const app = express();
 
-app.use(cors({ origin: process.env.FRONTEND_URL || '*' }));
+// app.use(cors({ origin: process.env.FRONTEND_URL || '*' }));
+
+app.use(cors({
+  origin: 'https://sahajatickets-frontend-inky.vercel.app',
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  credentials: true
+}));
+
 app.use(express.json({ limit: '10mb' }));
 
 // Routes
