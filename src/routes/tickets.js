@@ -107,7 +107,7 @@ router.post('/order', async (req, res) => {
 
     if (parseFloat(finalTotal) === 0 || tier.is_free) {
       // Free event — skip Razorpay
-      const tickets = await createTickets(priced, event_id, tier.id, discountCodeRow, discountAmount, finalTotal, bookingGroupId, language);
+      const tickets = await createTickets(priced, event_id, tier.id, discountCodeRow, discountAmount, finalTotal, bookingGroupId, language, null, req.body.account_id);
 
       // Deliver in background, respond immediately
       deliverTickets(tickets, eventRes.rows[0]).catch(err => console.error('Background delivery failed:', err));
@@ -145,7 +145,7 @@ router.post('/order', async (req, res) => {
     });
 
     // Save pending tickets
-    await createTickets(priced, event_id, tier.id, discountCodeRow, discountAmount, finalTotal, bookingGroupId, language, rpOrder.id);
+    await createTickets(priced, event_id, tier.id, discountCodeRow, discountAmount, finalTotal, bookingGroupId, language, rpOrder.id, req.body.account_id);
 
     res.json({
       order_id: rpOrder.id,
@@ -304,7 +304,8 @@ router.get('/lookup', async (req, res) => {
 });
 
 // ── Internal helpers ──────────────────────────────────────────────
-async function createTickets(pricedSeekers, eventId, tierId, discountCodeRow, discountAmount, finalTotal, groupId, language, rpOrderId = null) {
+async function createTickets(pricedSeekers, eventId, tierId, discountCodeRow, discountAmount, finalTotal, groupId, language, rpOrderId = null, accountId = null) {
+  
   const perTicketDiscount = pricedSeekers.length > 0 ? discountAmount / pricedSeekers.length : 0;
   const tickets = [];
   const { getAgeCategory } = require('../utils/helpers');
@@ -320,16 +321,20 @@ async function createTickets(pricedSeekers, eventId, tierId, discountCodeRow, di
     const res = await db.query(
       `INSERT INTO tickets 
         (event_id, tier_id, seeker_name, age, sex, age_category, zone_city, email, phone,
-         language, is_first_time, base_amount, discount_amount, final_amount,
-         discount_code_used, payment_status, razorpay_order_id, booking_group_id)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18)
-       RETURNING *`,
-      [eventId, tierId, s.name, s.age, s.sex, ageCategory, s.zone_city || null,
-       s.email ? s.email.toLowerCase() : null, s.phone, language || 'en', s.is_first_time || false,
-       s.price, perTicketDiscount, finalAmt,
-       discountCodeRow ? discountCodeRow.code : null,
-       (finalAmt === 0 ? 'free' : 'pending'),
-       rpOrderId, groupId]
+          language, is_first_time, base_amount, discount_amount, final_amount,
+          discount_code_used, payment_status, razorpay_order_id, booking_group_id,
+          account_id, volunteer_interests, category_overridden)
+        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21)
+        RETURNING *`,
+       [eventId, tierId, s.name, s.age, s.sex, ageCategory, s.zone_city || null,
+        s.email ? s.email.toLowerCase() : null, s.phone, language || 'en', s.is_first_time || false,
+        s.price, perTicketDiscount, finalAmt,
+        discountCodeRow ? discountCodeRow.code : null,
+        (finalAmt === 0 ? 'free' : 'pending'),
+        rpOrderId, groupId,
+        accountId || null,
+        s.volunteer_interests ? s.volunteer_interests : null,
+        s.category_overridden || false]
     );
     tickets.push(res.rows[0]);
   }

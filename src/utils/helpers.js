@@ -136,6 +136,29 @@ async function sendWhatsAppTicket(ticket, event, qrBase64) {
   }
 }
 
+// Calculate age from date of birth
+function calculateAge(dateOfBirth) {
+  if (!dateOfBirth) return null;
+  const dob = new Date(dateOfBirth);
+  const today = new Date();
+  let age = today.getFullYear() - dob.getFullYear();
+  const monthDiff = today.getMonth() - dob.getMonth();
+  if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < dob.getDate())) {
+    age--;
+  }
+  return age;
+}
+
+function getAgeCategoryFromDOB(dateOfBirth, tier) {
+  const age = calculateAge(dateOfBirth);
+  if (!age) return null;
+  const childMax = tier?.child_max_age || 12;
+  const yuvaMax = tier?.yuva_max_age || 25;
+  if (age <= childMax) return 'child';
+  if (age <= yuvaMax) return 'yuva';
+  return 'adult';
+}
+
 module.exports = {
   getAgeCategory,
   calculatePrice,
@@ -143,5 +166,7 @@ module.exports = {
   generateQRCode,
   generateQRBuffer,
   sendTicketEmail,
-  sendWhatsAppTicket
+  sendWhatsAppTicket,
+  calculateAge,
+  getAgeCategoryFromDOB
 };

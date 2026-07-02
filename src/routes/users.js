@@ -74,4 +74,27 @@ router.post('/', authenticate, organizerOnly, async (req, res) => {
   }
 });
 
+// PATCH /api/users/change-password — organizer changes own password
+router.patch('/change-password', authenticate, async (req, res) => {
+    try {
+      const { current_password, new_password } = req.body;
+      if (!current_password || !new_password) {
+        return res.status(400).json({ error: 'Current and new password required' });
+      }
+      if (new_password.length < 8) {
+        return res.status(400).json({ error: 'New password must be at least 8 characters' });
+      }
+      const userRes = await db.query('SELECT * FROM users WHERE id=$1', [req.user.id]);
+      const user = userRes.rows[0];
+      const valid = await bcrypt.compare(current_password, user.password_hash);
+      if (!valid) return res.status(400).json({ error: 'Current password is incorrect' });
+  
+      const hash = await bcrypt.hash(new_password, 12);
+      await db.query('UPDATE users SET password_hash=$1 WHERE id=$2', [hash, req.user.id]);
+      res.json({ success: true, message: 'Password changed successfully' });
+    } catch (err) {
+      res.status(500).json({ error: 'Failed to change password' });
+    }
+  });
+  
 module.exports = router;

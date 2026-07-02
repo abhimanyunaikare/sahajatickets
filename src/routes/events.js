@@ -306,4 +306,37 @@ router.post('/:id/volunteers', authenticate, organizerOnly, async (req, res) => 
   }
 });
 
+// GET /api/events/:id/volunteers/interests — filter attendees by volunteer interest
+router.get('/:id/volunteers/interests', authenticate, async (req, res) => {
+  try {
+    const { interest } = req.query;
+
+    let query = `
+      SELECT 
+        t.seeker_name, t.age, t.age_category, t.sex, t.zone_city,
+        t.phone, t.email, t.volunteer_interests,
+        f.volunteer_interests AS family_volunteer_interests,
+        f.name AS family_name
+      FROM tickets t
+      LEFT JOIN family_members f ON f.id = t.family_member_id
+      WHERE t.event_id = $1 
+        AND t.payment_status IN ('paid','free')
+        AND (t.volunteer_interests IS NOT NULL AND array_length(t.volunteer_interests, 1) > 0)
+    `;
+    const params = [req.params.id];
+
+    if (interest) {
+      query += ` AND $2 = ANY(t.volunteer_interests)`;
+      params.push(interest);
+    }
+
+    query += ` ORDER BY t.seeker_name`;
+    const result = await db.query(query, params);
+    res.json(result.rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: 'Failed to fetch volunteer interests' });
+  }
+});
+
 module.exports = router;
